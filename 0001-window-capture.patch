@@ -1,0 +1,116 @@
+From 9ed71c022c0f52f58db3ce5c7f35ca8261388504 Mon Sep 17 00:00:00 2001
+From: Filip Jergle Almquist <filip.jergle.almquist@uxstream.com>
+Date: Mon, 27 May 2024 14:58:43 +0000
+Subject: [PATCH] window capture
+
+---
+ include/render/gles2.h     |  1 +
+ include/wlr/render/gles2.h |  7 ++++++-
+ render/gles2/texture.c     | 26 ++++++++++++++++++++++++++
+ xwayland/sockets.c         |  6 +++---
+ 4 files changed, 36 insertions(+), 4 deletions(-)
+
+diff --git a/include/render/gles2.h b/include/render/gles2.h
+index 930cf07d..be29ec29 100644
+--- a/include/render/gles2.h
++++ b/include/render/gles2.h
+@@ -70,6 +70,7 @@ struct wlr_gles2_renderer {
+ 		PFNGLGETQUERYOBJECTIVEXTPROC glGetQueryObjectivEXT;
+ 		PFNGLGETQUERYOBJECTUI64VEXTPROC glGetQueryObjectui64vEXT;
+ 		PFNGLGETINTEGER64VEXTPROC glGetInteger64vEXT;
++		PFNGLCOPYIMAGESUBDATAOESPROC glCopyImageSubDataOES;
+ 	} procs;
+ 
+ 	struct {
+diff --git a/include/wlr/render/gles2.h b/include/wlr/render/gles2.h
+index daf6aab3..d766b487 100644
+--- a/include/wlr/render/gles2.h
++++ b/include/wlr/render/gles2.h
+@@ -36,6 +36,11 @@ bool wlr_renderer_is_gles2(struct wlr_renderer *wlr_renderer);
+ bool wlr_render_timer_is_gles2(struct wlr_render_timer *timer);
+ bool wlr_texture_is_gles2(struct wlr_texture *texture);
+ void wlr_gles2_texture_get_attribs(struct wlr_texture *texture,
+-	struct wlr_gles2_texture_attribs *attribs);
++								   struct wlr_gles2_texture_attribs *attribs);
++void wlr_gles2_texture_copy(struct wlr_texture *src,
++							struct wlr_texture *dst);
++struct wlr_texture *wlr_gles2_texture_from_dmabuf(
++	struct wlr_renderer *wlr_renderer,
++	struct wlr_dmabuf_attributes *attribs);
+ 
+ #endif
+diff --git a/render/gles2/texture.c b/render/gles2/texture.c
+index b444745c..a66d404d 100644
+--- a/render/gles2/texture.c
++++ b/render/gles2/texture.c
+@@ -15,6 +15,9 @@
+ #include "render/gles2.h"
+ #include "render/pixel_format.h"
+ #include "types/wlr_buffer.h"
++#define GL_GLEXT_PROTOTYPES
++#include <GL/gl.h>
++#include <GL/glext.h>
+ 
+ static const struct wlr_texture_impl texture_impl;
+ 
+@@ -298,6 +301,7 @@ static struct wlr_texture *gles2_texture_from_dmabuf(
+ 	glBindTexture(texture->target, texture->tex);
+ 	glTexParameteri(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+ 	glTexParameteri(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++	glTexParameteri(texture->target, GL_TEXTURE_MAX_LEVEL, 0);
+ 	renderer->procs.glEGLImageTargetTexture2DOES(texture->target, texture->image);
+ 	glBindTexture(texture->target, 0);
+ 
+@@ -379,3 +383,25 @@ void wlr_gles2_texture_get_attribs(struct wlr_texture *wlr_texture,
+ 		.has_alpha = texture->has_alpha,
+ 	};
+ }
++
++static int min(int a, int b)
++{
++	return a < b ? a : b;
++}
++
++void wlr_gles2_texture_copy(struct wlr_texture *src,
++							struct wlr_texture *dst)
++{
++	struct wlr_gles2_texture *src_tex = gles2_get_texture(src);
++	struct wlr_gles2_texture *dst_tex = gles2_get_texture(dst);
++	int width = min(src->width, dst->width);
++	int height = min(src->height, dst->height);
++	glCopyImageSubData(src_tex->tex, src_tex->target, 0, 0, 0, 0, dst_tex->tex, dst_tex->target, 0, 0, 0, 0, width, height, 1);
++}
++
++struct wlr_texture *wlr_gles2_texture_from_dmabuf(
++	struct wlr_renderer *wlr_renderer,
++	struct wlr_dmabuf_attributes *attribs)
++{
++	return gles2_texture_from_dmabuf(wlr_renderer, attribs);
++}
+diff --git a/xwayland/sockets.c b/xwayland/sockets.c
+index 873fde8d..1b59e294 100644
+--- a/xwayland/sockets.c
++++ b/xwayland/sockets.c
+@@ -166,7 +166,7 @@ int open_display_sockets(int socks[2]) {
+ 	int lock_fd, display;
+ 	char lock_name[64];
+ 
+-	for (display = 0; display <= 32; display++) {
++	for (display = 0; display <= 128; display++) {
+ 		snprintf(lock_name, sizeof(lock_name), lock_fmt, display);
+ 		if ((lock_fd = open(lock_name, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0444)) >= 0) {
+ 			if (!open_sockets(socks, display)) {
+@@ -212,8 +212,8 @@ int open_display_sockets(int socks[2]) {
+ 		}
+ 	}
+ 
+-	if (display > 32) {
+-		wlr_log(WLR_ERROR, "No display available in the first 33");
++	if (display > 128) {
++		wlr_log(WLR_ERROR, "No display available in the first 129");
+ 		return -1;
+ 	}
+ 
+-- 
+2.40.1
+
