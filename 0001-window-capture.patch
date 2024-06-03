@@ -1,14 +1,14 @@
-From 9ed71c022c0f52f58db3ce5c7f35ca8261388504 Mon Sep 17 00:00:00 2001
+From 9c2b5965f6ef2dfff4cab8b0397d2faa0d6562cc Mon Sep 17 00:00:00 2001
 From: Filip Jergle Almquist <filip.jergle.almquist@uxstream.com>
-Date: Mon, 27 May 2024 14:58:43 +0000
+Date: Mon, 3 Jun 2024 10:12:38 +0200
 Subject: [PATCH] window capture
 
 ---
  include/render/gles2.h     |  1 +
  include/wlr/render/gles2.h |  7 ++++++-
- render/gles2/texture.c     | 26 ++++++++++++++++++++++++++
+ render/gles2/texture.c     | 27 +++++++++++++++++++++++++++
  xwayland/sockets.c         |  6 +++---
- 4 files changed, 36 insertions(+), 4 deletions(-)
+ 4 files changed, 37 insertions(+), 4 deletions(-)
 
 diff --git a/include/render/gles2.h b/include/render/gles2.h
 index 930cf07d..be29ec29 100644
@@ -40,7 +40,7 @@ index daf6aab3..d766b487 100644
  
  #endif
 diff --git a/render/gles2/texture.c b/render/gles2/texture.c
-index b444745c..a66d404d 100644
+index b444745c..d76a81e2 100644
 --- a/render/gles2/texture.c
 +++ b/render/gles2/texture.c
 @@ -15,6 +15,9 @@
@@ -61,7 +61,7 @@ index b444745c..a66d404d 100644
  	renderer->procs.glEGLImageTargetTexture2DOES(texture->target, texture->image);
  	glBindTexture(texture->target, 0);
  
-@@ -379,3 +383,25 @@ void wlr_gles2_texture_get_attribs(struct wlr_texture *wlr_texture,
+@@ -379,3 +383,26 @@ void wlr_gles2_texture_get_attribs(struct wlr_texture *wlr_texture,
  		.has_alpha = texture->has_alpha,
  	};
  }
@@ -79,6 +79,7 @@ index b444745c..a66d404d 100644
 +	int width = min(src->width, dst->width);
 +	int height = min(src->height, dst->height);
 +	glCopyImageSubData(src_tex->tex, src_tex->target, 0, 0, 0, 0, dst_tex->tex, dst_tex->target, 0, 0, 0, 0, width, height, 1);
++	glFlush();
 +}
 +
 +struct wlr_texture *wlr_gles2_texture_from_dmabuf(
